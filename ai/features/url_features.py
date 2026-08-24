@@ -46,9 +46,13 @@ def calculate_entropy(value:str) -> float:
 
     for count in counts.values():
         probability = count/length
-        entropy = probability*math.log2(probability)
+        if probability > 0:
+            entropy -= (
+                probability *
+                math.log2(probability)
+            )
 
-    return entropy
+    return max(0.0, entropy)
 
 def is_ip_address(hostname:str) -> bool:
     if not hostname:return False
@@ -84,14 +88,14 @@ def extract_url_features(url:str) -> dict:
     features = {
         "url_length": len(url),
         "hostname_length": len(hostname),
-        "path__length": len(path),
+        "path_length": len(path),
         "query_length": len(query),
 
         #Characteristics
         "num_dots": url.count("."),
         "num_hyphens": url.count("-"),
         "num_underscores": url.count("_"),
-        "num_slashes": url.count("/"),
+        "path_slash_count": path.count("/"),
         "num_question_marks": url.count("?"),
         "num_equals": url.count("="),
         "num_digits": sum(char.isdigit() for char in url),
