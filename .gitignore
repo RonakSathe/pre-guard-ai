@@ -19,7 +19,7 @@ venv/
 logs/
 
 # Raw datasets
-ai/data/raw/
+# ai/data/raw/
 
 # OS
 .DS_Store
