@@ -1,0 +1,64 @@
+body {
+
+    width: 280px;
+
+    margin: 0;
+
+    font-family:
+        Arial,
+        sans-serif;
+
+    background: #111827;
+
+    color: white;
+}
+
+
+.container {
+
+    padding: 20px;
+
+}
+
+
+h1 {
+
+    font-size: 20px;
+
+    margin-top: 0;
+
+}
+
+
+p {
+
+    color: #9ca3af;
+
+}
+
+
+.status {
+
+    margin-top: 20px;
+
+    padding: 12px;
+
+    border-radius: 8px;
+
+    background: #374151;
+
+}
+
+
+.online {
+
+    background: #065f46;
+
+}
+
+
+.offline {
+
+    background: #991b1b;
+
+}
