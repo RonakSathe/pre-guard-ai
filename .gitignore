@@ -28,3 +28,11 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+node_modules/
+.plasmo/
+build/
+dist/
+.env
+.env.*
+*.log
