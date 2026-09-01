@@ -13,6 +13,7 @@ chrome.runtime.onMessage.addListener(
         const url = message.url;
         console.log("PRE-GUARD analyzing", url);
 
+        // Validating URL
         if (typeof url !== "string" || !url.trim()){
             sendResponse({
                 success: false,
@@ -39,6 +40,7 @@ chrome.runtime.onMessage.addListener(
             return response.json();
         })
 
+        // Send  result back to content script
         .then(result => {
             console.log("PRE-GUARD MLP result:",result);
             sendResponse({
