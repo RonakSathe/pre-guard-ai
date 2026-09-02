@@ -2,6 +2,42 @@ console.log("PRE-GUARD backgound service loaded");
 
 const API_URL = "http://127.0.0.1:8000/predict";
 
+// Types
+type Prediction = {
+    url: string
+    risk_score: number
+    risk_percentage: number
+    classification: string
+}
+
+type NavigationEntry = {
+    url: string
+    classification: string
+    risk: number
+    time: number
+}
+
+// LIVE REDIRECT MEMORY
+const tabChains = new Map<number,NavigationEntry[]>()
+
+// Analyze URL FUNCTION
+// RESUED by hover + navigation intelligence
+async function analyzeURL(url:string): Promise<Prediction> {
+    const response = await fetch(API_URL, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({url})
+    })
+
+    if (!response.ok){throw new Error(`API returned HTTP ${response.status}`)}
+    return await response.json()
+}
+
+// MESSAGE HANDLER
+
+
 chrome.runtime.onMessage.addListener(
     (message,sender,sendResponse) => {
         //ANALYZE URL
@@ -74,3 +110,44 @@ chrome.runtime.onMessage.addListener(
         return true;
     }
 );
+
+// Navigation Start
+// Fires whenever a page starts navigating
+chrome.webNavigation.onBeforeNavigate.addListener(
+    async (details) =>{
+        // Ignoring iframes
+        if (details.frameId !== 0){return}
+
+        // Ignoring chrome interal pages
+        if ( details.url.startsWith("chrome://") || details.url.startsWith("chrome-extension://")){return}
+
+        console.log("\n ============Navigation Start=============")
+        console.log("Tab:", details.tabId)
+        console.log("URL:", details.url)
+
+        try{
+            const result = await analyzeURL(details.url)
+            console.log("AI: ", result.classification)
+            console.log("Risk: ",result.risk_percentage)
+
+            const chain = tabChains.get(details.tabId) ?? []
+
+            chain.push({
+                url: details.url,
+                classification: result.classification,
+                risk:result.risk_percentage,
+                time:Date.now()
+            })
+
+            tabChains.set(details.tabId,chain)
+        } catch (error){
+            console.error("Navigation analysis failed:", error)
+        }
+    }
+)
+
+// Navigation Committed
+// Detect redirects & final destination
+chrome.webNavigation.onCommitted.addListener((details) => {
+    if ()
+})
