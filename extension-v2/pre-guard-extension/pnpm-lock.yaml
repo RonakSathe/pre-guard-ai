@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      lmdb:
+        specifier: ^3.5.6
+        version: 3.5.6
       plasmo:
         specifier: 0.90.5
         version: 0.90.5(@swc/core@1.16.1(@swc/helpers@0.5.23))(@swc/helpers@0.5.23)(@types/node@20.11.5)(postcss@8.5.26)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)(supports-color@7.2.0)
@@ -255,6 +258,9 @@ packages:
   '@expo/spawn-async@1.7.2':
     resolution: {integrity: sha512-QdWi16+CHB9JYP7gma19OVVg0BFkvU8zNj9GjWorYI8Iv8FUxjOCcYRuAmX4s/h91e4e7BPsskc8cSrZYho9Ew==}
     engines: {node: '>=12'}
+
+  '@harperfast/extended-iterable@1.0.3':
+    resolution: {integrity: sha512-sSAYhQca3rDWtQUHSAPeO7axFIUJOI6hn1gjRC5APVE1a90tuyT8f5WIgRsFhhWA7htNkju2veB9eWL6YHi/Lw==}
 
   '@ianvs/prettier-plugin-sort-imports@4.1.1':
     resolution: {integrity: sha512-kJhXq63ngpTQ2dxgf5GasbPJWsJA3LgoOdd7WGhpUSzLgLgI4IsIzYkbJf9kmpOHe7Vdm/o3PcRA3jmizXUuAQ==}
@@ -554,6 +560,11 @@ packages:
     cpu: [arm64]
     os: [darwin]
 
+  '@lmdb/lmdb-darwin-arm64@3.5.6':
+    resolution: {integrity: sha512-mY5FG4TjPAkY4P0w+OhHaUka5mDh2TX2WKYIwuKzJ1zeW3VvRgxdam/lGJTquI+bthTx5CSHDW+BAQCnNAzkEA==}
+    cpu: [arm64]
+    os: [darwin]
+
   '@lmdb/lmdb-darwin-x64@2.5.2':
     resolution: {integrity: sha512-KvPH56KRLLx4KSfKBx0m1r7GGGUMXm0jrKmNE7plbHlesZMuPJICtn07HYgQhj1LNsK7Yqwuvnqh1QxhJnF1EA==}
     cpu: [x64]
@@ -561,6 +572,11 @@ packages:
 
   '@lmdb/lmdb-darwin-x64@2.7.11':
     resolution: {integrity: sha512-jhj1aB4K8ycRL1HOQT5OtzlqOq70jxUQEWRN9Gqh3TIDN30dxXtiHi6EWF516tzw6v2+3QqhDMJh8O6DtTGG8Q==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@lmdb/lmdb-darwin-x64@3.5.6':
+    resolution: {integrity: sha512-foa+pwitysO8k+xhs7psBFfTKnVgR69NlZRRTHaFVDqphh7AdGpLeyRzKw/ofatr/sN6TiHRRW6mmop0ZrrppQ==}
     cpu: [x64]
     os: [darwin]
 
@@ -574,6 +590,11 @@ packages:
     cpu: [arm64]
     os: [linux]
 
+  '@lmdb/lmdb-linux-arm64@3.5.6':
+    resolution: {integrity: sha512-HmiyFFdJa38s1heCMSooSPaBSFTHJ3C+ERPp28xAPlDX1YiALJVOgbry065nXd8Y7KISWjnw05zpG1RX8IfftA==}
+    cpu: [arm64]
+    os: [linux]
+
   '@lmdb/lmdb-linux-arm@2.5.2':
     resolution: {integrity: sha512-5kQAP21hAkfW5Bl+e0P57dV4dGYnkNIpR7f/GAh6QHlgXx+vp/teVj4PGRZaKAvt0GX6++N6hF8NnGElLDuIDw==}
     cpu: [arm]
@@ -581,6 +602,11 @@ packages:
 
   '@lmdb/lmdb-linux-arm@2.7.11':
     resolution: {integrity: sha512-dHfLFVSrw/v5X5lkwp0Vl7+NFpEeEYKfMG2DpdFJnnG1RgHQZngZxCaBagFoaJGykRpd2DYF1AeuXBFrAUAXfw==}
+    cpu: [arm]
+    os: [linux]
+
+  '@lmdb/lmdb-linux-arm@3.5.6':
+    resolution: {integrity: sha512-QR4YRyR5h5Z8eGXrNQjiyo2NNDfqi3tCc9dQG5Is1blCt+qWw1ZoBWhlWAr5d+jshkifMIJjVHzHGKbkKzF8Tw==}
     cpu: [arm]
     os: [linux]
 
@@ -594,6 +620,16 @@ packages:
     cpu: [x64]
     os: [linux]
 
+  '@lmdb/lmdb-linux-x64@3.5.6':
+    resolution: {integrity: sha512-ADzCuCF2cTNiX9kDScqcz1fjnAkxPpQNneV3KFTdV3wWtVlI2sTGzySoMTgDpinkMMFj1NTJlxA6XR8fwc4hlA==}
+    cpu: [x64]
+    os: [linux]
+
+  '@lmdb/lmdb-win32-arm64@3.5.6':
+    resolution: {integrity: sha512-J7A9aEQsQiv0TYtBGL7NDIPp2lOS8nnl+zm4sWZm1xlsTTaQ4PgD096Adzdrk27rw3UxCkDXdCUa4ax41oztBQ==}
+    cpu: [arm64]
+    os: [win32]
+
   '@lmdb/lmdb-win32-x64@2.5.2':
     resolution: {integrity: sha512-zrBczSbXKxEyK2ijtbRdICDygRqWSRPpZMN5dD1T8VMEW5RIhIbwFWw2phDRXuBQdVDpSjalCIUMWMV2h3JaZA==}
     cpu: [x64]
@@ -601,6 +637,11 @@ packages:
 
   '@lmdb/lmdb-win32-x64@2.7.11':
     resolution: {integrity: sha512-BJwkHlSUgtB+Ei52Ai32M1AOMerSlzyIGA/KC4dAGL+GGwVMdwG8HGCOA2TxP3KjhbgDPMYkv7bt/NmOmRIFng==}
+    cpu: [x64]
+    os: [win32]
+
+  '@lmdb/lmdb-win32-x64@3.5.6':
+    resolution: {integrity: sha512-1g7G0knRX2iV/voDu54yxrGqw5Dk0w2oIYb7dgJq8IkOi+m7wbD8Q3QpPFjh0C01G58S88dqGn03len6UPCXsg==}
     cpu: [x64]
     os: [win32]
 
@@ -2412,6 +2453,10 @@ packages:
     resolution: {integrity: sha512-x9bD4hVp7PFLUoELL8RglbNXhAMt5CYhkmss+CEau9KlNoilsTzNi9QDsPZb3KMpOGZXG6jmXhW3bBxE2XVztw==}
     hasBin: true
 
+  lmdb@3.5.6:
+    resolution: {integrity: sha512-j3uE8ReKNyUWDjhfEFSJqE/1DLtfTR5Z8yFzVHvBjAk37wNg7HdScjcv8ttPHRvrdgPQMPWxFFI0SsdBzI5lBw==}
+    hasBin: true
+
   load-tsconfig@0.2.5:
     resolution: {integrity: sha512-IXO6OCs9yg8tMKzfPZ1YmheJbZCiEsnBdcB03l0OcfK9prKnJb96siuHCr5Fl37/yo9DnKU+TLpxzTUspw9shg==}
     engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
@@ -2532,6 +2577,9 @@ packages:
 
   node-addon-api@4.3.0:
     resolution: {integrity: sha512-73sE9+3UaLYYFmDsFZnqCInzPyh3MqIwZO9cw58yIqAZhONrrabrYyYe3TuIqtIiOuTXVhsGau8hcrhhwSsDIQ==}
+
+  node-addon-api@6.1.0:
+    resolution: {integrity: sha512-+eawOlIgy680F0kBzPUNFhMZGtJ1YmqM6l4+Crf4IkImjYrO/mqPwRMh352g23uIaQKFItcQ64I7KMaJxHgAVA==}
 
   node-addon-api@7.1.1:
     resolution: {integrity: sha512-5m3bsyrjFWE1xf7nz7YXdN4udnVtXK6/Yfgn5qnahL6bCkf2yKt4k3nuTKAtT4r3IG8JNR2ncsIMdZuAzJjHQQ==}
@@ -3247,6 +3295,8 @@ snapshots:
     dependencies:
       cross-spawn: 7.0.6
 
+  '@harperfast/extended-iterable@1.0.3': {}
+
   '@ianvs/prettier-plugin-sort-imports@4.1.1(@vue/compiler-sfc@3.3.4)(prettier@3.2.4)(supports-color@7.2.0)':
     dependencies:
       '@babel/core': 7.29.7(supports-color@7.2.0)
@@ -3498,10 +3548,16 @@ snapshots:
   '@lmdb/lmdb-darwin-arm64@2.7.11':
     optional: true
 
+  '@lmdb/lmdb-darwin-arm64@3.5.6':
+    optional: true
+
   '@lmdb/lmdb-darwin-x64@2.5.2':
     optional: true
 
   '@lmdb/lmdb-darwin-x64@2.7.11':
+    optional: true
+
+  '@lmdb/lmdb-darwin-x64@3.5.6':
     optional: true
 
   '@lmdb/lmdb-linux-arm64@2.5.2':
@@ -3510,10 +3566,16 @@ snapshots:
   '@lmdb/lmdb-linux-arm64@2.7.11':
     optional: true
 
+  '@lmdb/lmdb-linux-arm64@3.5.6':
+    optional: true
+
   '@lmdb/lmdb-linux-arm@2.5.2':
     optional: true
 
   '@lmdb/lmdb-linux-arm@2.7.11':
+    optional: true
+
+  '@lmdb/lmdb-linux-arm@3.5.6':
     optional: true
 
   '@lmdb/lmdb-linux-x64@2.5.2':
@@ -3522,10 +3584,19 @@ snapshots:
   '@lmdb/lmdb-linux-x64@2.7.11':
     optional: true
 
+  '@lmdb/lmdb-linux-x64@3.5.6':
+    optional: true
+
+  '@lmdb/lmdb-win32-arm64@3.5.6':
+    optional: true
+
   '@lmdb/lmdb-win32-x64@2.5.2':
     optional: true
 
   '@lmdb/lmdb-win32-x64@2.7.11':
+    optional: true
+
+  '@lmdb/lmdb-win32-x64@3.5.6':
     optional: true
 
   '@mischnic/json-sourcemap@0.1.0':
@@ -5650,6 +5721,23 @@ snapshots:
       '@lmdb/lmdb-linux-x64': 2.7.11
       '@lmdb/lmdb-win32-x64': 2.7.11
 
+  lmdb@3.5.6:
+    dependencies:
+      '@harperfast/extended-iterable': 1.0.3
+      msgpackr: 1.12.1
+      node-addon-api: 6.1.0
+      node-gyp-build-optional-packages: 5.2.2
+      ordered-binary: 1.6.1
+      weak-lru-cache: 1.2.2
+    optionalDependencies:
+      '@lmdb/lmdb-darwin-arm64': 3.5.6
+      '@lmdb/lmdb-darwin-x64': 3.5.6
+      '@lmdb/lmdb-linux-arm': 3.5.6
+      '@lmdb/lmdb-linux-arm64': 3.5.6
+      '@lmdb/lmdb-linux-x64': 3.5.6
+      '@lmdb/lmdb-win32-arm64': 3.5.6
+      '@lmdb/lmdb-win32-x64': 3.5.6
+
   load-tsconfig@0.2.5: {}
 
   locate-character@3.0.0: {}
@@ -5760,6 +5848,8 @@ snapshots:
 
   node-addon-api@4.3.0: {}
 
+  node-addon-api@6.1.0: {}
+
   node-addon-api@7.1.1: {}
 
   node-gyp-build-optional-packages@5.0.3: {}
@@ -5769,7 +5859,6 @@ snapshots:
   node-gyp-build-optional-packages@5.2.2:
     dependencies:
       detect-libc: 2.1.2
-    optional: true
 
   node-object-hash@3.1.1: {}
 
