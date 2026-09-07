@@ -1,8 +1,10 @@
-console.log("PRE-GUARD background service loaded")
+console.log("🛡️ PRE-GUARD background service loaded")
 
 const API_URL = "http://127.0.0.1:8000/predict"
 
-// Types
+// ============================================================
+// TYPES
+// ============================================================
 
 type Prediction = {
   url: string
@@ -15,14 +17,28 @@ type NavigationEntry = {
   url: string
   classification: string
   risk: number
-  time: number
+  timestamp: number
 }
 
-// LIVE REDIRECT MEMORY
+type TabNavigation = {
+  chain: NavigationEntry[]
+  startedAt: number
+  lastCommittedUrl: string | null
+}
 
-const tabChains = new Map<number, NavigationEntry[]>()
+const warningTabs = new Set<number>()
 
-// Analyze URL function
+const HIGH_RISK_THRESHOLD = 70
+
+// ============================================================
+// LIVE TAB MEMORY
+// ============================================================
+
+const tabNavigations = new Map<number, TabNavigation>()
+
+// ============================================================
+// URL ANALYZER
+// ============================================================
 
 async function analyzeURL(url: string): Promise<Prediction> {
   const response = await fetch(API_URL, {
@@ -37,23 +53,112 @@ async function analyzeURL(url: string): Promise<Prediction> {
     throw new Error(`API returned HTTP ${response.status}`)
   }
 
-  return await response.json()
+  return response.json()
 }
 
+// ============================================================
+// ADD URL TO REDIRECT CHAIN
+// ============================================================
+
+async function addToChain(tabId: number, url: string) {
+  let navigation = tabNavigations.get(tabId)
+
+  if (!navigation) {
+    navigation = {
+      chain: [],
+      startedAt: Date.now(),
+      lastCommittedUrl: null
+    }
+
+    tabNavigations.set(tabId, navigation)
+  }
+
+  const alreadyExists = navigation.chain.some(
+    (entry) => entry.url === url
+  )
+
+  if (alreadyExists) {
+    return
+  }
+
+  console.log("🔎 PRE-GUARD analyzing:", url)
+
+  try {
+    const result = await analyzeURL(url)
+
+    navigation.chain.push({
+      url,
+      classification: result.classification,
+      risk: result.risk_percentage,
+      timestamp: Date.now()
+    })
+
+    console.log(
+      "🤖 AI:",
+      result.classification,
+      "| Risk:",
+      result.risk_percentage + "%"
+    )
+  } catch (error) {
+    console.error(
+      "❌ Analysis failed:",
+      error
+    )
+  }
+}
+
+// SHOW Redirect warning
+async function showRedirectWarning(
+  tabId: number,
+  url: string,
+  risk: number,
+  classification: string
+) {
+  if (warningTabs.has(tabId)) {
+    return
+  }
+  warningTabs.add(tabId)
+  console.log("🚨 PRE-GUARD HIGH-RISK REDIRECT")
+
+  console.log("URL:", url)
+  console.log("Risk:", risk)
+  console.log("Classification:", classification)
+  const warningURL =
+    chrome.runtime.getURL(
+      "tabs/redirect-warning.html"
+    ) +
+    `?url=${encodeURIComponent(url)}` +
+    `&risk=${encodeURIComponent(risk)}` +
+    `&classification=${encodeURIComponent(
+      classification
+    )}`
+  try {
+    await chrome.tabs.update(
+      tabId,
+      {
+        url: warningURL
+      }
+    )
+    } catch (error) {
+    console.error(
+      "❌ Could not open PRE-GUARD warning:",
+      error
+    )
+    warningTabs.delete(tabId)
+  }
+}
+
+// ============================================================
 // MESSAGE HANDLER
+// ============================================================
 
 chrome.runtime.onMessage.addListener(
   (message, sender, sendResponse) => {
-
     if (message?.type !== "ANALYZE_URL") {
       return
     }
 
     const url = message.url
-
-    console.log("PRE-GUARD analyzing:", url)
-
-    // Validate URL
 
     if (typeof url !== "string" || !url.trim()) {
       sendResponse({
@@ -64,44 +169,18 @@ chrome.runtime.onMessage.addListener(
       return
     }
 
-    // Send URL to FastAPI
-
-    fetch(API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ url })
-    })
-
-      .then(async (response) => {
-
-        if (!response.ok) {
-          throw new Error(
-            `API returned HTTP ${response.status}`
-          )
-        }
-
-        return response.json()
-      })
-
+    analyzeURL(url)
       .then((result) => {
-
-        console.log(
-          "PRE-GUARD MLP result:",
-          result
-        )
+        console.log("🧠 MLP RESULT:", result)
 
         sendResponse({
           success: true,
           result
         })
       })
-
       .catch((error) => {
-
         console.error(
-          "❌ PRE-GUARD API error:",
+          "❌ PRE-GUARD API ERROR:",
           error
         )
 
@@ -114,24 +193,19 @@ chrome.runtime.onMessage.addListener(
         })
       })
 
-    // Response will be asynchronous
-
     return true
   }
 )
 
+// ============================================================
 // NAVIGATION START
+// ============================================================
 
 chrome.webNavigation.onBeforeNavigate.addListener(
   async (details) => {
-
-    // Ignore iframes
-
     if (details.frameId !== 0) {
       return
     }
-
-    // Ignore Chrome internal pages
 
     if (
       details.url.startsWith("chrome://") ||
@@ -140,60 +214,126 @@ chrome.webNavigation.onBeforeNavigate.addListener(
       return
     }
 
+    const existing = tabNavigations.get(details.tabId)
+
+    const isNewNavigation =
+      !existing ||
+      existing.lastCommittedUrl !== details.url
+
+    if (isNewNavigation && existing?.chain.length) {
+      const lastTime =
+        existing.chain[
+          existing.chain.length - 1
+        ].timestamp
+
+      if (Date.now() - lastTime > 3000) {
+        console.log(
+          "\n🆕 NEW NAVIGATION DETECTED"
+        )
+
+        tabNavigations.set(details.tabId, {
+          chain: [],
+          startedAt: Date.now(),
+          lastCommittedUrl: null
+        })
+      }
+    }
+
     console.log(
-      "\n============ NAVIGATION START ============"
+      "\n=============================="
     )
 
-    console.log("Tab:", details.tabId)
-    console.log("URL:", details.url)
+    console.log(
+      "🚀 NAVIGATION START"
+    )
 
-    try {
+    console.log(
+      "Tab:",
+      details.tabId
+    )
 
-      const result = await analyzeURL(details.url)
+    console.log(
+      "URL:",
+      details.url
+    )
 
-      console.log(
-        "AI:",
-        result.classification
-      )
-
-      console.log(
-        "Risk:",
-        result.risk_percentage
-      )
-
-      const chain =
-        tabChains.get(details.tabId) ?? []
-
-      chain.push({
-        url: details.url,
-        classification: result.classification,
-        risk: result.risk_percentage,
-        time: Date.now()
-      })
-
-      tabChains.set(details.tabId, chain)
-
-    } catch (error) {
-
-      console.error(
-        "Navigation analysis failed:",
-        error
-      )
-    }
+    await addToChain(
+      details.tabId,
+      details.url
+    )
   }
 )
 
+// ============================================================
 // NAVIGATION COMMITTED
+// ============================================================
 
 chrome.webNavigation.onCommitted.addListener(
-  (details) => {
-
+  async (details) => {
     if (details.frameId !== 0) {
       return
     }
 
-    const chain =
-      tabChains.get(details.tabId) ?? []
+    if (
+      details.url.startsWith("chrome://") ||
+      details.url.startsWith("chrome-extension://")
+    ) {
+      return
+    }
+
+    let navigation =
+      tabNavigations.get(details.tabId)
+
+    if (!navigation) {
+      navigation = {
+        chain: [],
+        startedAt: Date.now(),
+        lastCommittedUrl: null
+      }
+
+      tabNavigations.set(
+        details.tabId,
+        navigation
+      )
+    }
+
+    navigation.lastCommittedUrl =
+      details.url
+
+    const exists =
+      navigation.chain.some(
+        (entry) =>
+          entry.url === details.url
+      )
+
+    if (!exists) {
+      await addToChain(
+        details.tabId,
+        details.url
+      )
+    }
+
+    // 
+    const currentEntry =
+  navigation.chain.find(
+    (entry) =>
+      entry.url === details.url
+  )
+
+if (
+  currentEntry &&
+  currentEntry.risk >= HIGH_RISK_THRESHOLD &&
+  currentEntry.classification === "HIGH_RISK"
+) {
+  await showRedirectWarning(
+    details.tabId,
+    details.url,
+    currentEntry.risk,
+    currentEntry.classification
+  )
+
+  return
+}
 
     console.log(
       "\n✅ NAVIGATION COMMITTED"
@@ -204,19 +344,15 @@ chrome.webNavigation.onCommitted.addListener(
       details.url
     )
 
-    // Detect server redirect
-
     if (
       details.transitionQualifiers.includes(
         "server_redirect"
       )
     ) {
       console.log(
-        "↪ Server redirect detected"
+        "↪ SERVER REDIRECT DETECTED"
       )
     }
-
-    // Detect client redirect
 
     if (
       details.transitionQualifiers.includes(
@@ -224,7 +360,7 @@ chrome.webNavigation.onCommitted.addListener(
       )
     ) {
       console.log(
-        "↪ Client redirect detected"
+        "↪ CLIENT REDIRECT DETECTED"
       )
     }
 
@@ -232,32 +368,36 @@ chrome.webNavigation.onCommitted.addListener(
       "\n🛡️ REDIRECT CHAIN"
     )
 
-    chain.forEach((item, index) => {
+    navigation.chain.forEach(
+      (entry, index) => {
+        console.log(
+          `${index + 1}. ${entry.url}`
+        )
 
-      console.log(
-        `${index + 1}. ${item.url}`
-      )
-
-      console.log(
-        `   ${item.classification} | ${item.risk}%`
-      )
-    })
-
-    console.log(
-      "────────────────────────"
+        console.log(
+          `   ${entry.classification} | ${entry.risk}%`
+        )
+      }
     )
 
     console.log(
-      "Destination:",
-      details.url
+      "=============================="
     )
   }
 )
 
-// CLEAN MEMORY
+// ============================================================
+// CLEAN TAB MEMORY
+// ============================================================
 
 chrome.tabs.onRemoved.addListener(
   (tabId) => {
-    tabChains.delete(tabId)
+    tabNavigations.delete(tabId)
+    warningTabs.delete(tabId)
+
+    console.log(
+      "🗑️ Cleared memory for tab",
+      tabId
+    )
   }
 )
