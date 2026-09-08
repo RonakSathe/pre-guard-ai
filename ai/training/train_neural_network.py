@@ -4,6 +4,9 @@ import joblib
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.neural_network import MLPClassifier
+from ai.features.url_features import extract_url_features
+
+
 
 from sklearn.metrics import (
     accuracy_score,
@@ -23,8 +26,48 @@ DATASET_PATH = "ai/data/processed/url_features.csv"
 
 MODEL_PATH = "ai/models/neural_network.joblib"
 SCALER_PATH = "ai/models/neural_network_scaler.joblib"
+FEEDBACK_PATH = "ai/data/feedback.csv"
 
 RANDOM_STATE = 42
+
+
+# ============================================================
+# FEATURE EXTRACTION
+
+# ============================================================
+# CONVERT FEEDBACK URLS INTO MODEL FEATURES
+# ============================================================
+
+def prepare_feedback_features(feedback_df):
+
+    if feedback_df.empty:
+        return pd.DataFrame()
+
+    feedback_features = []
+
+    print("\nConverting feedback URLs into model features...")
+
+    for _, row in feedback_df.iterrows():
+
+        url = row["url"]
+        label = int(row["label"])
+
+        try:
+            features = extract_url_features(url)
+            features["label"] = label
+
+            feedback_features.append(features)
+
+            print(f"  ✓ {url}")
+
+        except Exception as error:
+            print(f"  ✗ Could not process: {url}")
+            print(f"    Error: {error}")
+
+    if not feedback_features:
+        return pd.DataFrame()
+
+    return pd.DataFrame(feedback_features)    
 
 
 # ============================================================
@@ -45,6 +88,69 @@ def train_model():
     print("\n[1/7] Loading dataset...")
 
     df = pd.read_csv(DATASET_PATH)
+
+    # --------------------------------------------------------
+    # 1B. LOAD FEEDBACK DATASET
+    # --------------------------------------------------------
+
+    print(f"\n [1B]: CHecking user feedback .....")
+
+    try:
+        feedback_df = pd.read_csv(FEEDBACK_PATH)
+        print(f"Feedback samples: {len(feedback_df):,}")
+
+        if not {"url","label"}.issubset(feedback_df.columns):
+            print("Feedback CSV does not contain required columns. Skipping feedback integration.")
+
+        feedback_df = feedback_df[["url", "label"]].dropna()
+        feedback_df["url"] = feedback_df["url"].astype(str).str.strip()
+        feedback_df["label"] = pd.to_numeric(feedback_df["label"], errors='coerce')
+
+        feedback_df = feedback_df.dropna(subset=["label"])
+        feedback_df = feedback_df[feedback_df["label"].isin([0, 1])]
+
+        print(f"Feedback samples: {len(feedback_df):,}")
+
+        if len(feedback_df) > 0:
+            print("\n Feedback class distribution:")
+            print(feedback_df["label"].astype(int).value_counts().sort_index())
+    except FileNotFoundError:
+        feedback_df = pd.DataFrame(columns=["url", "label"])
+        print("Feedback CSV not found. Skipping feedback integration.")
+
+    # --------------------------------------------------------
+    # 1C. EXTRACT FEATURES FROM FEEDBACK
+        # --------------------------------------------------------
+    # 1C. CONVERT FEEDBACK TO FEATURES
+    # --------------------------------------------------------
+
+    feedback_features_df = prepare_feedback_features(feedback_df)
+
+    if not feedback_features_df.empty:
+
+        print("\nFeedback feature conversion complete.")
+
+        print(
+            f"Feedback feature count: "
+            f"{feedback_features_df.shape[1] - 1}"
+        )
+
+        print(
+            f"Feedback samples ready: "
+            f"{len(feedback_features_df):,}"
+        )
+
+        print("\nFeedback feature columns:")
+        print(
+            list(
+                feedback_features_df.drop(
+                    columns=["label"]
+                ).columns
+            )
+        )
+
+    else:
+        print("\nNo feedback features available.")
 
     X = df.drop(columns=["label"])
     y = df["label"]

@@ -26,7 +26,13 @@ type TabNavigation = {
   lastCommittedUrl: string | null
 }
 
+// ============================================================
+// SECURITY STATE
+// ============================================================
+
 const warningTabs = new Set<number>()
+
+const bypassOnce = new Map<number, string>()
 
 const HIGH_RISK_THRESHOLD = 70
 
@@ -107,7 +113,10 @@ async function addToChain(tabId: number, url: string) {
   }
 }
 
-// SHOW Redirect warning
+// ============================================================
+// SHOW REDIRECT WARNING
+// ============================================================
+
 async function showRedirectWarning(
   tabId: number,
   url: string,
@@ -117,33 +126,35 @@ async function showRedirectWarning(
   if (warningTabs.has(tabId)) {
     return
   }
-  warningTabs.add(tabId)
-  console.log("🚨 PRE-GUARD HIGH-RISK REDIRECT")
 
+  warningTabs.add(tabId)
+
+  console.log("🚨 PRE-GUARD HIGH-RISK REDIRECT")
+  console.log("Tab:", tabId)
   console.log("URL:", url)
-  console.log("Risk:", risk)
+  console.log("Risk:", risk + "%")
   console.log("Classification:", classification)
+
   const warningURL =
     chrome.runtime.getURL(
       "tabs/redirect-warning.html"
     ) +
     `?url=${encodeURIComponent(url)}` +
     `&risk=${encodeURIComponent(risk)}` +
-    `&classification=${encodeURIComponent(
-      classification
-    )}`
+    `&classification=${encodeURIComponent(classification)}` +
+    `&tabId=${encodeURIComponent(tabId)}`+
+    `&t=${Date.now()}`
+
   try {
-    await chrome.tabs.update(
-      tabId,
-      {
-        url: warningURL
-      }
-    )
-    } catch (error) {
+    await chrome.tabs.update(tabId, {
+      url: warningURL
+    })
+  } catch (error) {
     console.error(
       "❌ Could not open PRE-GUARD warning:",
       error
     )
+
     warningTabs.delete(tabId)
   }
 }
@@ -154,13 +165,71 @@ async function showRedirectWarning(
 
 chrome.runtime.onMessage.addListener(
   (message, sender, sendResponse) => {
+
+    // --------------------------------------------------------
+    // CONTINUE ANYWAY
+    // --------------------------------------------------------
+
+    if (message?.type === "CONTINUE_ANYWAY") {
+      const tabId = message.tabId
+      const url = message.url
+
+      if (
+        typeof tabId !== "number" ||
+        typeof url !== "string" ||
+        !url.trim()
+      ) {
+        sendResponse({
+          success: false,
+          error: "Invalid tab ID or URL."
+        })
+
+        return
+      }
+
+      bypassOnce.set(tabId, url)
+
+      warningTabs.delete(tabId)
+
+      console.log(
+        "🟢 PRE-GUARD ONE-TIME BYPASS REQUESTED"
+      )
+
+      console.log(
+        "Tab ID:",
+        tabId
+      )
+
+      console.log(
+        "URL:",
+        url
+      )
+
+      chrome.tabs.update(tabId, {
+        url
+      })
+
+      sendResponse({
+        success: true
+      })
+
+      return
+    }
+
+    // --------------------------------------------------------
+    // ANALYZE URL
+    // --------------------------------------------------------
+
     if (message?.type !== "ANALYZE_URL") {
       return
     }
 
     const url = message.url
 
-    if (typeof url !== "string" || !url.trim()) {
+    if (
+      typeof url !== "string" ||
+      !url.trim()
+    ) {
       sendResponse({
         success: false,
         error: "URL is empty."
@@ -171,7 +240,10 @@ chrome.runtime.onMessage.addListener(
 
     analyzeURL(url)
       .then((result) => {
-        console.log("🧠 MLP RESULT:", result)
+        console.log(
+          "🧠 MLP RESULT:",
+          result
+        )
 
         sendResponse({
           success: true,
@@ -203,6 +275,7 @@ chrome.runtime.onMessage.addListener(
 
 chrome.webNavigation.onBeforeNavigate.addListener(
   async (details) => {
+
     if (details.frameId !== 0) {
       return
     }
@@ -214,28 +287,37 @@ chrome.webNavigation.onBeforeNavigate.addListener(
       return
     }
 
-    const existing = tabNavigations.get(details.tabId)
+    const existing =
+      tabNavigations.get(details.tabId)
 
     const isNewNavigation =
       !existing ||
       existing.lastCommittedUrl !== details.url
 
-    if (isNewNavigation && existing?.chain.length) {
+    if (
+      isNewNavigation &&
+      existing?.chain.length
+    ) {
       const lastTime =
         existing.chain[
           existing.chain.length - 1
         ].timestamp
 
-      if (Date.now() - lastTime > 3000) {
+      if (
+        Date.now() - lastTime > 3000
+      ) {
         console.log(
           "\n🆕 NEW NAVIGATION DETECTED"
         )
 
-        tabNavigations.set(details.tabId, {
-          chain: [],
-          startedAt: Date.now(),
-          lastCommittedUrl: null
-        })
+        tabNavigations.set(
+          details.tabId,
+          {
+            chain: [],
+            startedAt: Date.now(),
+            lastCommittedUrl: null
+          }
+        )
       }
     }
 
@@ -270,9 +352,47 @@ chrome.webNavigation.onBeforeNavigate.addListener(
 
 chrome.webNavigation.onCommitted.addListener(
   async (details) => {
+
     if (details.frameId !== 0) {
       return
     }
+
+    // --------------------------------------------------------
+    // CHECK ONE-TIME BYPASS
+    // --------------------------------------------------------
+
+    const bypassedUrl =
+      bypassOnce.get(details.tabId)
+
+    if (
+      bypassedUrl &&
+      bypassedUrl === details.url
+    ) {
+
+      bypassOnce.delete(details.tabId)
+
+      warningTabs.delete(details.tabId)
+
+      console.log(
+        "\n🟢 PRE-GUARD BYPASS USED"
+      )
+
+      console.log(
+        "Tab:",
+        details.tabId
+      )
+
+      console.log(
+        "URL:",
+        details.url
+      )
+
+      return
+    }
+
+    // --------------------------------------------------------
+    // IGNORE EXTENSION / CHROME PAGES
+    // --------------------------------------------------------
 
     if (
       details.url.startsWith("chrome://") ||
@@ -281,10 +401,15 @@ chrome.webNavigation.onCommitted.addListener(
       return
     }
 
+    // --------------------------------------------------------
+    // GET NAVIGATION MEMORY
+    // --------------------------------------------------------
+
     let navigation =
       tabNavigations.get(details.tabId)
 
     if (!navigation) {
+
       navigation = {
         chain: [],
         startedAt: Date.now(),
@@ -300,6 +425,10 @@ chrome.webNavigation.onCommitted.addListener(
     navigation.lastCommittedUrl =
       details.url
 
+    // --------------------------------------------------------
+    // MAKE SURE URL IS IN CHAIN
+    // --------------------------------------------------------
+
     const exists =
       navigation.chain.some(
         (entry) =>
@@ -313,27 +442,39 @@ chrome.webNavigation.onCommitted.addListener(
       )
     }
 
-    // 
+    // --------------------------------------------------------
+    // FIND CURRENT AI RESULT
+    // --------------------------------------------------------
+
     const currentEntry =
-  navigation.chain.find(
-    (entry) =>
-      entry.url === details.url
-  )
+      navigation.chain.find(
+        (entry) =>
+          entry.url === details.url
+      )
 
-if (
-  currentEntry &&
-  currentEntry.risk >= HIGH_RISK_THRESHOLD &&
-  currentEntry.classification === "HIGH_RISK"
-) {
-  await showRedirectWarning(
-    details.tabId,
-    details.url,
-    currentEntry.risk,
-    currentEntry.classification
-  )
+    // --------------------------------------------------------
+    // HIGH-RISK QUARANTINE
+    // --------------------------------------------------------
 
-  return
-}
+    if (
+      currentEntry &&
+      currentEntry.risk >= HIGH_RISK_THRESHOLD &&
+      currentEntry.classification === "HIGH_RISK"
+    ) {
+
+      await showRedirectWarning(
+        details.tabId,
+        details.url,
+        currentEntry.risk,
+        currentEntry.classification
+      )
+
+      return
+    }
+
+    // --------------------------------------------------------
+    // NORMAL NAVIGATION LOGGING
+    // --------------------------------------------------------
 
     console.log(
       "\n✅ NAVIGATION COMMITTED"
@@ -364,12 +505,17 @@ if (
       )
     }
 
+    // --------------------------------------------------------
+    // REDIRECT CHAIN
+    // --------------------------------------------------------
+
     console.log(
       "\n🛡️ REDIRECT CHAIN"
     )
 
     navigation.chain.forEach(
       (entry, index) => {
+
         console.log(
           `${index + 1}. ${entry.url}`
         )
@@ -392,8 +538,12 @@ if (
 
 chrome.tabs.onRemoved.addListener(
   (tabId) => {
+
     tabNavigations.delete(tabId)
+
     warningTabs.delete(tabId)
+
+    bypassOnce.delete(tabId)
 
     console.log(
       "🗑️ Cleared memory for tab",

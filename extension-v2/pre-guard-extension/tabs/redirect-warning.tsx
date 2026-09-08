@@ -4,6 +4,7 @@ type WarningData = {
   url: string
   risk: number
   classification: string
+  tabId: number
 }
 
 export default function RedirectWarning() {
@@ -15,6 +16,7 @@ export default function RedirectWarning() {
     const url = params.get("url")
     const risk = params.get("risk")
     const classification = params.get("classification")
+    const tabId = params.get("tabId")
 
     if (!url) {
       return
@@ -23,7 +25,8 @@ export default function RedirectWarning() {
     setData({
       url,
       risk: Number(risk || "0"),
-      classification: classification || "HIGH_RISK"
+      classification: classification || "HIGH_RISK",
+      tabId: Number(tabId || "0")
     })
   }, [])
 
@@ -36,7 +39,39 @@ export default function RedirectWarning() {
       return
     }
 
-    window.location.href = data.url
+    chrome.runtime.sendMessage({
+      type: "CONTINUE_ANYWAY",
+      tabId: data.tabId,
+      url: data.url
+    
+    })
+  }
+
+  async function reportSafe(){
+    if (!data?.url) {return}
+    try{
+      const response = await fetch("http://127.0.0.1:8000/feedback",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            url: data.url,
+            label: 0
+          })
+        }
+      )
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      console.log("✅ Successfully reported safe website:", data.url)
+      alert("✅ Successfully reported safe website.")
+    } catch (error) {
+      console.error("❌ Failed to report safe website:", error)
+      alert("❌ Failed to report safe website. Please try again later.")
+    }
   }
 
   if (!data) {
@@ -122,6 +157,13 @@ export default function RedirectWarning() {
           </button>
 
         </div>
+
+        <button
+          onClick={reportSafe}
+          style={styles.safeButton}
+        >
+          🛡️ I trust this site — report as safe
+        </button>
 
         <div style={styles.footer}>
           🛡️ Protected by PRE-GUARD AI
@@ -251,32 +293,49 @@ const styles = {
 
   buttons: {
     display: "flex",
-    gap: "14px"
-  },
+    gap: "14px",
+    width: "100%",
 
+  },
   backButton: {
     flex: 1,
-    padding: "15px",
+    padding: "16px 24px",
     borderRadius: "10px",
-    border: "1px solid #d1d5db",
-    background: "#ffffff",
+    border: "2px solid #374151",
+    backgroundColor: "#ffffff",
     color: "#111827",
     fontSize: "16px",
     fontWeight: "bold",
-    cursor: "pointer"
-  },
+    cursor: "pointer",
+    textAlign: "center" as const
+},
 
   continueButton: {
-    flex: 1,
-    padding: "15px",
-    borderRadius: "10px",
-    border: "none",
-    background: "#b91c1c",
-    color: "#ffffff",
-    fontSize: "16px",
-    fontWeight: "bold",
-    cursor: "pointer"
-  },
+  flex: 1,
+  padding: "16px 24px",
+  borderRadius: "10px",
+  border: "2px solid #b91c1c",
+  backgroundColor: "#b91c1c",
+  color: "#ffffff",
+  fontSize: "16px",
+  fontWeight: "bold",
+  cursor: "pointer",
+  textAlign: "center" as const
+},
+
+safeButton: {
+  width: "100%",
+  marginTop: "14px",
+  padding: "14px 20px",
+  borderRadius: "10px",
+  border: "2px solid #2563eb",
+  backgroundColor: "#ffffff",
+  color: "#1d4ed8",
+  fontSize: "15px",
+  fontWeight: "bold",
+  cursor: "pointer",
+  textAlign: "center" as const
+},
 
   footer: {
     textAlign: "center" as const,
