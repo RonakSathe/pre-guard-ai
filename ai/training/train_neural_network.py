@@ -24,8 +24,8 @@ from sklearn.metrics import (
 
 DATASET_PATH = "ai/data/processed/url_features.csv"
 
-MODEL_PATH = "ai/models/neural_network.joblib"
-SCALER_PATH = "ai/models/neural_network_scaler.joblib"
+MODEL_PATH = "ai/models/neural_network_feedback_test.joblib"
+SCALER_PATH = "ai/models/neural_network_feedback_test_scaler.joblib"
 FEEDBACK_PATH = "ai/data/feedback.csv"
 
 RANDOM_STATE = 42
@@ -104,13 +104,18 @@ def train_model():
 
         feedback_df = feedback_df[["url", "label"]].dropna()
         feedback_df["url"] = feedback_df["url"].astype(str).str.strip()
-        feedback_df["label"] = pd.to_numeric(feedback_df["label"], errors='coerce')
+        
+        
+        feedback_df["label"] = pd.to_numeric(
+            feedback_df["label"],
+            errors='coerce')
 
         feedback_df = feedback_df.dropna(subset=["label"])
         feedback_df = feedback_df[feedback_df["label"].isin([0, 1])]
+        feedback_df = feedback_df.drop_duplicates(subset=["url"],keep="last")
 
+        
         print(f"Feedback samples: {len(feedback_df):,}")
-
         if len(feedback_df) > 0:
             print("\n Feedback class distribution:")
             print(feedback_df["label"].astype(int).value_counts().sort_index())
@@ -160,6 +165,48 @@ def train_model():
 
     print("\nClass distribution:")
     print(y.value_counts().sort_index())
+
+    # 1D............................
+    # Merge validated feedback into dataset
+
+    if not feedback_features_df.empty:
+        print("\nMErging validated ffeedback into training dataset")
+
+        # Making sure feature columns match to the original dataset
+        feature_columns = X.columns.tolist()
+
+        feedback_features_df = feedback_features_df[feature_columns + ["label"]]
+
+        # Add feedback samples to original dataset
+        df = pd.concat([df, feedback_features_df], ignore_index=True)
+
+        print(
+            f"Original samples : {len(df) - len(feedback_features_df):,}"
+        )
+
+        print(
+            f"Feedback samples : {len(feedback_features_df):,}"
+        )
+
+        print(
+            f"Combined samples : {len(df):,}"
+        )
+
+        print("\nCombined class distribution:")
+        print(
+            df["label"]
+            .astype(int)
+            .value_counts()
+            .sort_index()
+        )
+
+        # Rebuild X and y after merging feedback
+        X = df.drop(columns=["label"])
+        y = df["label"]
+
+    else:
+
+        print("\nNo feedback samples to merge.")
 
     # --------------------------------------------------------
     # 2. TRAIN / TEST SPLIT
