@@ -1,4 +1,5 @@
 console.log("🛡️ PRE-GUARD background service loaded")
+import { getHostname, getSiteDecision, rememberSite } from "./siteTrust"
 
 const API_URL = "http://127.0.0.1:8000/predict"
 
@@ -551,3 +552,41 @@ chrome.tabs.onRemoved.addListener(
     )
   }
 )
+
+
+// THe siteTrut TET
+chrome.runtime.onMessage.addListener(async (message) => {
+  if (message.type !== "TEST_SITE_TRUST") {
+    return
+  }
+
+  const testUrl = "https://www.example.com/test/page"
+
+  console.log("=== PRE-GUARD SITE TRUST TEST ===")
+
+  console.log(
+    "Hostname:",
+    getHostname(testUrl)
+  )
+
+  console.log(
+    "Before:",
+    await getSiteDecision(testUrl)
+  )
+
+  await rememberSite(testUrl, "trusted")
+
+  console.log(
+    "After trusted:",
+    await getSiteDecision(testUrl)
+  )
+
+  await rememberSite(testUrl, "untrusted")
+
+  console.log(
+    "After untrusted:",
+    await getSiteDecision(testUrl)
+  )
+
+  console.log("=== TEST COMPLETE ===")
+})
