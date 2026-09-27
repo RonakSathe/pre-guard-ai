@@ -288,6 +288,31 @@ chrome.webNavigation.onBeforeNavigate.addListener(
       return
     }
 
+    const siteDecision = await getSiteDecision(details.url)
+
+    if (siteDecision === "trusted") {
+        console.log(
+        "\n🟢 PRE-GUARD TRUSTED SITE DETECTED"
+      )
+
+      console.log("URL:", details.url)
+      console.log("Decision:", siteDecision)
+      console.log("Tab ID:", details.tabId)
+    } else if (siteDecision === "untrusted") {
+      console.log(
+        "\n🔴 PRE-GUARD UNTRUSTED SITE DETECTED"
+      )
+      console.log("URL:", details.url)
+      console.log("Decision:", siteDecision)
+      console.log("Tab ID:", details.tabId)
+    } else {
+      console.log(
+        "\n🆕 PRE-GUARD FIRST VISIT"
+      )
+
+      console.log("URL:", details.url)
+}
+
     const existing =
       tabNavigations.get(details.tabId)
 
@@ -555,38 +580,3 @@ chrome.tabs.onRemoved.addListener(
 
 
 // THe siteTrut TET
-chrome.runtime.onMessage.addListener(async (message) => {
-  if (message.type !== "TEST_SITE_TRUST") {
-    return
-  }
-
-  const testUrl = "https://www.example.com/test/page"
-
-  console.log("=== PRE-GUARD SITE TRUST TEST ===")
-
-  console.log(
-    "Hostname:",
-    getHostname(testUrl)
-  )
-
-  console.log(
-    "Before:",
-    await getSiteDecision(testUrl)
-  )
-
-  await rememberSite(testUrl, "trusted")
-
-  console.log(
-    "After trusted:",
-    await getSiteDecision(testUrl)
-  )
-
-  await rememberSite(testUrl, "untrusted")
-
-  console.log(
-    "After untrusted:",
-    await getSiteDecision(testUrl)
-  )
-
-  console.log("=== TEST COMPLETE ===")
-})

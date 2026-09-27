@@ -27,6 +27,7 @@
   "manifest": {
     "permissions":[
       "webNavigation",
+      "storage",
       "tabs"
     ],
     "host_permissions": [

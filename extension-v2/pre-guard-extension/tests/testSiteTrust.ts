@@ -2,7 +2,7 @@ import {
   getHostname,
   getSiteDecision,
   rememberSite
-} from "./siteTrust"
+} from "../siteTrust"
 
 async function testSiteTrust() {
   const testUrl = "https://www.example.com/test/page"
