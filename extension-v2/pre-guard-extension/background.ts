@@ -1,7 +1,9 @@
 console.log("🛡️ PRE-GUARD background service loaded")
 import { getHostname, getSiteDecision, rememberSite } from "./siteTrust"
 
-const API_URL = "http://127.0.0.1:8000/predict"
+// const API_URL = "http://127.0.0.1:8000/predict"
+
+const API_URL = "https://suit-varied-advocacy-chosen.trycloudflare.com"
 
 // ============================================================
 // TYPES
@@ -290,7 +292,7 @@ if (message?.type === "SITE_TRUST_DECISION") {
     // Send feedback to the AI server.
     try {
       const feedbackResponse = await fetch(
-        "http://127.0.0.1:8000/feedback",
+        `${API_URL}/feedback`,
         {
           method: "POST",
           headers: {
