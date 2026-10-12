@@ -7,6 +7,11 @@ type WarningData = {
   tabId: number
 }
 
+
+const API_URL =
+  process.env.PLASMO_PUBLIC_API_URL ||
+  "https://pre-guard-ai.onrender.com"
+
 export default function RedirectWarning() {
   const [data, setData] = useState<WarningData | null>(null)
 
@@ -50,7 +55,7 @@ export default function RedirectWarning() {
   async function reportSafe(){
     if (!data?.url) {return}
     try{
-      const response = await fetch("http://127.0.0.1:8000/feedback",
+      const response = await fetch(`${API_URL}/feedback`,
         {
           method: "POST",
           headers: {

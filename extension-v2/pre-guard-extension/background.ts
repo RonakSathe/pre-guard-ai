@@ -1,9 +1,8 @@
 console.log("🛡️ PRE-GUARD background service loaded")
 import { getHostname, getSiteDecision, rememberSite } from "./siteTrust"
 
-// const API_URL = "http://127.0.0.1:8000/predict"
 
-const API_URL = "https://suit-varied-advocacy-chosen.trycloudflare.com"
+const API_URL = process.env.PRE_GUARD_API_URL
 
 // ============================================================
 // TYPES

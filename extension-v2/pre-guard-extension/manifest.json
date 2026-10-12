@@ -4,7 +4,7 @@
     "webNavigation"
   ],
   "host_permissions": [
-    "http://127.0.0.1:8000/*",
-    "<all_urls>"
+    "https://pre-guard-ai.onrender.com/*",
+    "http://127.0.0.1:8000/*"
   ]
 }
