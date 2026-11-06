@@ -5,6 +5,7 @@
   ],
   "host_permissions": [
     "https://pre-guard-ai.onrender.com/*",
-    "http://127.0.0.1:8000/*"
+    "http://127.0.0.1:8000/*",
+    "https://*/*"
   ]
 }
