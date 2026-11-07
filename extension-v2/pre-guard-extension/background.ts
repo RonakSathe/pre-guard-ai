@@ -2,7 +2,16 @@ console.log("🛡️ PRE-GUARD background service loaded")
 import { getHostname, getSiteDecision, rememberSite } from "./siteTrust"
 
 
-const API_URL = process.env.PRE_GUARD_API_URL
+const API_URL = (process.env.PLASMO_PUBLIC_API_URL || "https://pre-guard-ai.onrender.com")
+
+const PREDICT_API_URL = `${API_URL}/predict`
+const FEEDBACK_API_URL = `${API_URL}/feedback`
+
+
+
+console.log("🔗 PRE-GUARD API BASE:", API_URL)
+console.log("🔗 PRE-GUARD PREDICT:", PREDICT_API_URL)
+console.log("🔗 PRE-GUARD FEEDBACK:", FEEDBACK_API_URL)
 
 // ============================================================
 // TYPES
@@ -49,7 +58,7 @@ const tabNavigations = new Map<number, TabNavigation>()
 // ============================================================
 
 async function analyzeURL(url: string): Promise<Prediction> {
-  const response = await fetch(API_URL, {
+  const response = await fetch(PREDICT_API_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
@@ -126,6 +135,25 @@ async function showRedirectWarning(
   classification: string
 ) {
   if (warningTabs.has(tabId)) {
+    return
+  }
+
+  // Prevents attempts to redirect CHrome interal/dev toos
+  let tab: chrome.tabs.Tab | undefined
+
+  try{
+    tab = await chrome.tabs.get(tabId)
+  } catch (error) {
+    console.error("❌ Could not retrieve tab information:", error)
+    return
+  }
+
+  if (
+    tab.url?.startsWith("devtools://") ||
+    tab.url?.startsWith("chrome://") ||
+    tab.url?.startsWith("chrome-extension://")
+  ) {
+    console.log("⏭️ PRE-GUARD skipped Chrome internal window")
     return
   }
 
@@ -291,7 +319,7 @@ if (message?.type === "SITE_TRUST_DECISION") {
     // Send feedback to the AI server.
     try {
       const feedbackResponse = await fetch(
-        `${API_URL}/feedback`,
+        FEEDBACK_API_URL,
         {
           method: "POST",
           headers: {

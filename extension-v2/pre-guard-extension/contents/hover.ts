@@ -9,6 +9,7 @@ let tooltip: HTMLDivElement | null = null;
 let currentLink: HTMLAnchorElement | null = null;
 let requestCounter = 0;
 let warningOpen = false;
+let tooltipHideTimer: ReturnType<typeof setTimeout> | null = null;
 
 // Stores the latest prediction for the link being hovered.
 let currentPrediction: any = null;
@@ -18,17 +19,15 @@ let allowedNavigationUrl: string | null = null;
 
 
 // ============================================================
-// TOOLTIP
+//  CREATE TOOLTIP
 // ============================================================
 
 function createTooltip(): HTMLDivElement {
-
     if (tooltip) {
         return tooltip;
     }
 
     tooltip = document.createElement("div");
-
     tooltip.id = "pre-guard-tooltip";
 
     Object.assign(tooltip.style, {
@@ -48,10 +47,31 @@ function createTooltip(): HTMLDivElement {
         display: "none"
     });
 
+    // Keep tooltip open while mouse is inside it.
+    tooltip.addEventListener("mouseenter", () => {
+        if (!warningOpen) {
+            tooltip!.dataset.hovering = "true";
+        }
+    });
+
+    tooltip.addEventListener("mouseleave", () => {
+        if (warningOpen) return;
+
+        delete tooltip!.dataset.hovering;
+
+        currentLink = null;
+        currentPrediction = null;
+        requestCounter++;
+
+        hideTooltip();
+    });
+
     document.body.appendChild(tooltip);
 
     return tooltip;
 }
+
+
 
 
 // ============================================================
@@ -360,57 +380,42 @@ function analyzeUrl(
 // MOUSE OVER
 // ============================================================
 
-document.addEventListener(
-    "mouseover",
-    (event) => {
+document.addEventListener("mouseover", (event) => {
+    const target = event.target;
 
-        const target =
-            event.target;
+    if (!(target instanceof Element)) return;
 
-        if (
-            !(target instanceof Element)
-        ) {
-            return;
-        }
+    // Ignore mouse movement inside PRE-GUARD tooltip.
+    if (tooltip?.contains(target)) return;
 
-        const link =
-            target.closest("a");
+    const link = target.closest("a");
 
-        if (!link) {
-            return;
-        }
+    if (!link) return;
 
-        const url =
-            link.href;
+    const url = link.href;
 
-        if (!url) {
-            return;
-        }
+    if (!url) return;
 
-        if (
-            link === currentLink
-        ) {
-            return;
-        }
-
-        currentLink =
-            link;
-
-        currentPrediction =
-            null;
-
-        console.log(
-            "🔗 PRE-GUARD detected URL:",
-            url
-        );
-
-        analyzeUrl(
-            url,
-            event.clientX,
-            event.clientY
-        );
+    // Same link: do not repeatedly analyze.
+    if (tooltipHideTimer) {
+        clearTimeout(tooltipHideTimer);
+        tooltipHideTimer = null;
     }
-);
+
+    if (link === currentLink) return;
+
+    currentLink = link;
+    currentPrediction = null;
+
+    console.log("🔗 PRE-GUARD detected URL:", url);
+
+    analyzeUrl(
+        url,
+        event.clientX,
+        event.clientY
+    );
+});
+
 
 
 // ============================================================
@@ -518,81 +523,41 @@ document.addEventListener(
 // ============================================================
 // MOUSE OUT
 // ============================================================
+document.addEventListener("mouseout", (event) => {
+    if (warningOpen) return;
 
-document.addEventListener(
-    "mouseout",
-    (event) => {
+    const target = event.target;
 
-        if (warningOpen){return;}
+    if (!(target instanceof Element)) return;
 
-        const target =
-            event.target;
+    if (tooltip?.contains(target)) return;
 
-        if (
-            !(target instanceof Element)
-        ) {
-            return;
-        }
+    const link = target.closest("a");
 
-        const link =
-            target.closest("a");
+    if (!link || link !== currentLink) return;
 
-        if (!link) {
-            return;
-        }
+    const related = event.relatedTarget;
 
-        const related =
-            event.relatedTarget;
-
-
-        // ----------------------------------------------------
-        // Still inside the same link
-        // ----------------------------------------------------
-
-        if (
-            related instanceof Node &&
-            link.contains(related)
-        ) {
-            return;
-        }
-
-
-        // ----------------------------------------------------
-        // IMPORTANT
-        //
-        // If the click warning is currently visible,
-        // DO NOT hide it just because the mouse left
-        // the original link.
-        // ----------------------------------------------------
-
-        if (
-            tooltip &&
-            tooltip.style.display === "block" &&
-            tooltip.querySelector(
-                "#pg-continue"
-            )
-        ) {
-            return;
-        }
-
-
-        // ----------------------------------------------------
-        // Normal hover behavior
-        // ----------------------------------------------------
-
-        if (
-            link === currentLink
-        ) {
-
-            currentLink =
-                null;
-
-            currentPrediction =
-                null;
-
-            requestCounter++;
-
-            hideTooltip();
-        }
+    if (
+        related instanceof Node &&
+        (link.contains(related) || tooltip?.contains(related))
+    ) {
+        return;
     }
-);
+
+    // Delay hiding to prevent flickering.
+    if (tooltipHideTimer) {
+        clearTimeout(tooltipHideTimer);
+    }
+
+    tooltipHideTimer = setTimeout(() => {
+        if (warningOpen) return;
+
+        currentLink = null;
+        currentPrediction = null;
+        requestCounter++;
+
+        hideTooltip();
+        tooltipHideTimer = null;
+    }, 300);
+});
