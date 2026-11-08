@@ -9,8 +9,7 @@ type WarningData = {
 
 
 const API_URL =
-  process.env.PLASMO_PUBLIC_API_URL ||
-  "https://pre-guard-ai.onrender.com"
+  process.env.PLASMO_PUBLIC_API_URL 
 
 export default function RedirectWarning() {
   const [data, setData] = useState<WarningData | null>(null)

@@ -1,13 +1,11 @@
 console.log("🛡️ PRE-GUARD background service loaded")
+
 import { getHostname, getSiteDecision, rememberSite } from "./siteTrust"
 
-
-const API_URL = (process.env.PLASMO_PUBLIC_API_URL || "https://pre-guard-ai.onrender.com")
+const API_URL = process.env.PLASMO_PUBLIC_API_URL
 
 const PREDICT_API_URL = `${API_URL}/predict`
 const FEEDBACK_API_URL = `${API_URL}/feedback`
-
-
 
 console.log("🔗 PRE-GUARD API BASE:", API_URL)
 console.log("🔗 PRE-GUARD PREDICT:", PREDICT_API_URL)
@@ -117,10 +115,7 @@ async function addToChain(tabId: number, url: string) {
       result.risk_percentage + "%"
     )
   } catch (error) {
-    console.error(
-      "❌ Analysis failed:",
-      error
-    )
+    console.error("❌ Analysis failed:", error)
   }
 }
 
@@ -138,10 +133,9 @@ async function showRedirectWarning(
     return
   }
 
-  // Prevents attempts to redirect CHrome interal/dev toos
   let tab: chrome.tabs.Tab | undefined
 
-  try{
+  try {
     tab = await chrome.tabs.get(tabId)
   } catch (error) {
     console.error("❌ Could not retrieve tab information:", error)
@@ -166,32 +160,25 @@ async function showRedirectWarning(
   console.log("Classification:", classification)
 
   const warningURL =
-    chrome.runtime.getURL(
-      "tabs/redirect-warning.html"
-    ) +
+    chrome.runtime.getURL("tabs/redirect-warning.html") +
     `?url=${encodeURIComponent(url)}` +
     `&risk=${encodeURIComponent(risk)}` +
     `&classification=${encodeURIComponent(classification)}` +
-    `&tabId=${encodeURIComponent(tabId)}`+
+    `&tabId=${encodeURIComponent(tabId)}` +
     `&t=${Date.now()}`
 
   try {
-    await chrome.tabs.update(tabId, {
-      url: warningURL
-    })
+    await chrome.tabs.update(tabId, { url: warningURL })
   } catch (error) {
-    console.error(
-      "❌ Could not open PRE-GUARD warning:",
-      error
-    )
-
+    console.error("❌ Could not open PRE-GUARD warning:", error)
     warningTabs.delete(tabId)
   }
 }
 
-// ===========================================================
-// SHow trust decision
-// ===========================================================
+// ============================================================
+// SHOW TRUST DECISION
+// ============================================================
+
 function showTrustDecision(
   tabId: number,
   url: string,
@@ -199,240 +186,165 @@ function showTrustDecision(
   classification: string
 ) {
   const trustURL =
-    chrome.runtime.getURL(
-      "tabs/trust-decision.html"
-    ) +
+    chrome.runtime.getURL("tabs/trust-decision.html") +
     `?url=${encodeURIComponent(url)}` +
     `&risk=${encodeURIComponent(risk)}` +
     `&classification=${encodeURIComponent(classification)}` +
     `&tabId=${encodeURIComponent(tabId)}` +
     `&t=${Date.now()}`
 
-  console.log(
-    "\n🆕 PRE-GUARD FIRST-VISIT DECISION"
-  )
-
+  console.log("\n🆕 PRE-GUARD FIRST-VISIT DECISION")
   console.log("Tab:", tabId)
   console.log("URL:", url)
   console.log("Risk:", risk + "%")
   console.log("Classification:", classification)
 
-  chrome.tabs.update(tabId, {
-    url: trustURL
-  })
+  chrome.tabs.update(tabId, { url: trustURL })
 }
-
-
 
 // ============================================================
 // MESSAGE HANDLER
 // ============================================================
 
-chrome.runtime.onMessage.addListener(
-  async (message, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
-    // --------------------------------------------------------
-    // CONTINUE ANYWAY
-    // --------------------------------------------------------
+  console.log("📨 PRE-GUARD MESSAGE ARRIVED:", {
+    type: message?.type,
+    message,
+    senderUrl: sender.url,
+    senderTabId: sender.tab?.id
+  })
 
-    if (message?.type === "CONTINUE_ANYWAY") {
-      const tabId = message.tabId
-      const url = message.url
-
-      if (
-        typeof tabId !== "number" ||
-        typeof url !== "string" ||
-        !url.trim()
-      ) {
-        sendResponse({
-          success: false,
-          error: "Invalid tab ID or URL."
-        })
-
-        return
-      }
-
-      bypassOnce.set(tabId, url)
-
-      warningTabs.delete(tabId)
-
-      console.log(
-        "🟢 PRE-GUARD ONE-TIME BYPASS REQUESTED"
-      )
-
-      console.log(
-        "Tab ID:",
-        tabId
-      )
-
-      console.log(
-        "URL:",
-        url
-      )
-
-      chrome.tabs.update(tabId, {
-        url
-      })
-
-      sendResponse({
-        success: true
-      })
-
-      return
-    }
-
-    // Site Trust Decision
-    // --------------------------------------------------------
-// SITE TRUST DECISION
-// --------------------------------------------------------
-
-if (message?.type === "SITE_TRUST_DECISION") {
-  const tabId = message.tabId
-  const url = message.url
-  const decision = message.decision
-
-  if (
-    typeof tabId !== "number" ||
-    typeof url !== "string" ||
-    !url.trim() ||
-    (decision !== "trusted" &&
-      decision !== "untrusted")
-  ) {
-    sendResponse({
-      success: false,
-      error: "Invalid trust decision."
-    })
-
-    return
-  }
-
-  try {
-    await rememberSite(url, decision)
-
-    console.log(
-      "\n🧠 PRE-GUARD SITE DECISION SAVED"
-    )
-
-    console.log("URL:", url)
-    console.log("Decision:", decision)
-
-    // Send feedback to the AI server.
-    try {
-      const feedbackResponse = await fetch(
-        FEEDBACK_API_URL,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            url,
-            label: decision === "trusted" ? 0 : 1
-          })
-        }
-      )
-
-      if (!feedbackResponse.ok) {
-        console.error(
-          "❌ Feedback API returned HTTP",
-          feedbackResponse.status
-        )
-      } else {
-        console.log(
-          "📚 PRE-GUARD feedback saved:",
-          decision === "trusted" ? 0 : 1
-        )
-      }
-    } catch (feedbackError) {
-      console.error(
-        "❌ Could not save feedback:",
-        feedbackError
-      )
-    }
-
-    if (decision === "trusted") {
-      await chrome.tabs.update(tabId, {
-        url
-      })
-    } else {
-      await chrome.tabs.update(tabId, {
-        url: "about:blank"
-      })
-    }
-
-    sendResponse({
-      success: true
-    })
-  } catch (error) {
-    console.error(
-      "❌ Could not save site decision:",
-      error
-    )
-
-    sendResponse({
-      success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : String(error)
-    })
-  }
-
-  return true
-}
-
-    // --------------------------------------------------------
-    // ANALYZE URL
-    // --------------------------------------------------------
-
-    if (message?.type !== "ANALYZE_URL") {
-      return
-    }
-
+  // --------------------------------------------------------
+  // CONTINUE ANYWAY
+  // --------------------------------------------------------
+  if (message?.type === "CONTINUE_ANYWAY") {
+    const tabId = message.tabId
     const url = message.url
 
     if (
+      typeof tabId !== "number" ||
       typeof url !== "string" ||
       !url.trim()
     ) {
-      sendResponse({
-        success: false,
-        error: "URL is empty."
-      })
+      sendResponse({ success: false, error: "Invalid tab ID or URL." })
+      return false
+    }
 
-      return
+    bypassOnce.set(tabId, url)
+    warningTabs.delete(tabId)
+
+    console.log("🟢 PRE-GUARD ONE-TIME BYPASS REQUESTED")
+    console.log("Tab ID:", tabId)
+    console.log("URL:", url)
+
+    chrome.tabs.update(tabId, { url })
+    sendResponse({ success: true })
+    return false
+  }
+
+  // --------------------------------------------------------
+  // SITE TRUST DECISION
+  // --------------------------------------------------------
+  if (message?.type === "SITE_TRUST_DECISION") {
+    const tabId = message.tabId
+    const url = message.url
+    const decision = message.decision
+
+    if (
+      typeof tabId !== "number" ||
+      typeof url !== "string" ||
+      !url.trim() ||
+      (decision !== "trusted" && decision !== "untrusted")
+    ) {
+      sendResponse({ success: false, error: "Invalid trust decision." })
+      return false
+    }
+
+    ;(async () => {
+      try {
+        await rememberSite(url, decision)
+
+        console.log("\n🧠 PRE-GUARD SITE DECISION SAVED")
+        console.log("URL:", url)
+        console.log("Decision:", decision)
+
+        // Send feedback to the AI server.
+        try {
+          const feedbackResponse = await fetch(FEEDBACK_API_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              url,
+              label: decision === "trusted" ? 0 : 1
+            })
+          })
+
+          if (!feedbackResponse.ok) {
+            console.error(
+              "❌ Feedback API returned HTTP",
+              feedbackResponse.status
+            )
+          } else {
+            console.log(
+              "📚 PRE-GUARD feedback saved:",
+              decision === "trusted" ? 0 : 1
+            )
+          }
+        } catch (feedbackError) {
+          console.error("❌ Could not save feedback:", feedbackError)
+        }
+
+        if (decision === "trusted") {
+          await chrome.tabs.update(tabId, { url })
+        } else {
+          await chrome.tabs.update(tabId, { url: "about:blank" })
+        }
+
+        sendResponse({ success: true })
+      } catch (error) {
+        console.error("❌ Could not save site decision:", error)
+        sendResponse({
+          success: false,
+          error: error instanceof Error ? error.message : String(error)
+        })
+      }
+    })()
+
+    return true // keep the port open until the IIFE calls sendResponse
+  }
+
+  // --------------------------------------------------------
+  // ANALYZE URL
+  // --------------------------------------------------------
+  if (message?.type === "ANALYZE_URL") {
+    const url = message.url
+    console.log("🎯 PRE-GUARD ANALYZE BRANCH ENTERED:", url)
+
+    if (typeof url !== "string" || !url.trim()) {
+      sendResponse({ success: false, error: "URL is empty." })
+      return false
     }
 
     analyzeURL(url)
       .then((result) => {
-        console.log(
-          "🧠 MLP RESULT:",
-          result
-        )
-
-        sendResponse({
-          success: true,
-          result
-        })
+        console.log("🧠 MLP RESULT:", result)
+        sendResponse({ success: true, result })
       })
       .catch((error) => {
-        console.error(
-          "❌ PRE-GUARD API ERROR:",
-          error
-        )
-
+        console.error("❌ PRE-GUARD API ERROR:", error)
         sendResponse({
           success: false,
-          error:
-            error instanceof Error
-              ? error.message
-              : String(error)
+          error: error instanceof Error ? error.message : String(error)
         })
       })
 
-    return true
+    return true // keep the port open until the promise resolves
   }
-)
+
+  // Unknown message type — not ours, let other listeners handle it
+  return false
+})
 
 // ============================================================
 // NAVIGATION START
@@ -455,30 +367,21 @@ chrome.webNavigation.onBeforeNavigate.addListener(
     const siteDecision = await getSiteDecision(details.url)
 
     if (siteDecision === "trusted") {
-        console.log(
-        "\n🟢 PRE-GUARD TRUSTED SITE DETECTED"
-      )
-
+      console.log("\n🟢 PRE-GUARD TRUSTED SITE DETECTED")
       console.log("URL:", details.url)
       console.log("Decision:", siteDecision)
       console.log("Tab ID:", details.tabId)
     } else if (siteDecision === "untrusted") {
-      console.log(
-        "\n🔴 PRE-GUARD UNTRUSTED SITE DETECTED"
-      )
+      console.log("\n🔴 PRE-GUARD UNTRUSTED SITE DETECTED")
       console.log("URL:", details.url)
       console.log("Decision:", siteDecision)
       console.log("Tab ID:", details.tabId)
     } else {
-      console.log(
-        "\n🆕 PRE-GUARD FIRST VISIT"
-      )
-
+      console.log("\n🆕 PRE-GUARD FIRST VISIT")
       console.log("URL:", details.url)
-}
+    }
 
-    const existing =
-      tabNavigations.get(details.tabId)
+    const existing = tabNavigations.get(details.tabId)
 
     const isNewNavigation =
       !existing ||
@@ -493,12 +396,8 @@ chrome.webNavigation.onBeforeNavigate.addListener(
           existing.chain.length - 1
         ].timestamp
 
-      if (
-        Date.now() - lastTime > 3000
-      ) {
-        console.log(
-          "\n🆕 NEW NAVIGATION DETECTED"
-        )
+      if (Date.now() - lastTime > 3000) {
+        console.log("\n🆕 NEW NAVIGATION DETECTED")
 
         tabNavigations.set(
           details.tabId,
@@ -511,28 +410,12 @@ chrome.webNavigation.onBeforeNavigate.addListener(
       }
     }
 
-    console.log(
-      "\n=============================="
-    )
+    console.log("\n==============================")
+    console.log("🚀 NAVIGATION START")
+    console.log("Tab:", details.tabId)
+    console.log("URL:", details.url)
 
-    console.log(
-      "🚀 NAVIGATION START"
-    )
-
-    console.log(
-      "Tab:",
-      details.tabId
-    )
-
-    console.log(
-      "URL:",
-      details.url
-    )
-
-    await addToChain(
-      details.tabId,
-      details.url
-    )
+    await addToChain(details.tabId, details.url)
   }
 )
 
@@ -550,32 +433,18 @@ chrome.webNavigation.onCommitted.addListener(
     // --------------------------------------------------------
     // CHECK ONE-TIME BYPASS
     // --------------------------------------------------------
-
-    const bypassedUrl =
-      bypassOnce.get(details.tabId)
+    const bypassedUrl = bypassOnce.get(details.tabId)
 
     if (
       bypassedUrl &&
       bypassedUrl === details.url
     ) {
-
       bypassOnce.delete(details.tabId)
-
       warningTabs.delete(details.tabId)
 
-      console.log(
-        "\n🟢 PRE-GUARD BYPASS USED"
-      )
-
-      console.log(
-        "Tab:",
-        details.tabId
-      )
-
-      console.log(
-        "URL:",
-        details.url
-      )
+      console.log("\n🟢 PRE-GUARD BYPASS USED")
+      console.log("Tab:", details.tabId)
+      console.log("URL:", details.url)
 
       return
     }
@@ -583,7 +452,6 @@ chrome.webNavigation.onCommitted.addListener(
     // --------------------------------------------------------
     // IGNORE EXTENSION / CHROME PAGES
     // --------------------------------------------------------
-
     if (
       details.url.startsWith("chrome://") ||
       details.url.startsWith("chrome-extension://")
@@ -594,64 +462,46 @@ chrome.webNavigation.onCommitted.addListener(
     // --------------------------------------------------------
     // GET NAVIGATION MEMORY
     // --------------------------------------------------------
-
-    let navigation =
-      tabNavigations.get(details.tabId)
+    let navigation = tabNavigations.get(details.tabId)
 
     if (!navigation) {
-
       navigation = {
         chain: [],
         startedAt: Date.now(),
         lastCommittedUrl: null
       }
 
-      tabNavigations.set(
-        details.tabId,
-        navigation
-      )
+      tabNavigations.set(details.tabId, navigation)
     }
 
-    navigation.lastCommittedUrl =
-      details.url
+    navigation.lastCommittedUrl = details.url
 
     // --------------------------------------------------------
     // MAKE SURE URL IS IN CHAIN
     // --------------------------------------------------------
-
-    const exists =
-      navigation.chain.some(
-        (entry) =>
-          entry.url === details.url
-      )
+    const exists = navigation.chain.some(
+      (entry) => entry.url === details.url
+    )
 
     if (!exists) {
-      await addToChain(
-        details.tabId,
-        details.url
-      )
+      await addToChain(details.tabId, details.url)
     }
 
     // --------------------------------------------------------
     // FIND CURRENT AI RESULT
     // --------------------------------------------------------
-
-    const currentEntry =
-      navigation.chain.find(
-        (entry) =>
-          entry.url === details.url
-      )
+    const currentEntry = navigation.chain.find(
+      (entry) => entry.url === details.url
+    )
 
     // --------------------------------------------------------
     // HIGH-RISK QUARANTINE
     // --------------------------------------------------------
-
     if (
       currentEntry &&
       currentEntry.risk >= HIGH_RISK_THRESHOLD &&
       currentEntry.classification === "HIGH_RISK"
     ) {
-
       await showRedirectWarning(
         details.tabId,
         details.url,
@@ -665,60 +515,28 @@ chrome.webNavigation.onCommitted.addListener(
     // --------------------------------------------------------
     // NORMAL NAVIGATION LOGGING
     // --------------------------------------------------------
+    console.log("\n✅ NAVIGATION COMMITTED")
+    console.log("Final URL:", details.url)
 
-    console.log(
-      "\n✅ NAVIGATION COMMITTED"
-    )
-
-    console.log(
-      "Final URL:",
-      details.url
-    )
-
-    if (
-      details.transitionQualifiers.includes(
-        "server_redirect"
-      )
-    ) {
-      console.log(
-        "↪ SERVER REDIRECT DETECTED"
-      )
+    if (details.transitionQualifiers.includes("server_redirect")) {
+      console.log("↪ SERVER REDIRECT DETECTED")
     }
 
-    if (
-      details.transitionQualifiers.includes(
-        "client_redirect"
-      )
-    ) {
-      console.log(
-        "↪ CLIENT REDIRECT DETECTED"
-      )
+    if (details.transitionQualifiers.includes("client_redirect")) {
+      console.log("↪ CLIENT REDIRECT DETECTED")
     }
 
     // --------------------------------------------------------
     // REDIRECT CHAIN
     // --------------------------------------------------------
+    console.log("\n🛡️ REDIRECT CHAIN")
 
-    console.log(
-      "\n🛡️ REDIRECT CHAIN"
-    )
+    navigation.chain.forEach((entry, index) => {
+      console.log(`${index + 1}. ${entry.url}`)
+      console.log(`   ${entry.classification} | ${entry.risk}%`)
+    })
 
-    navigation.chain.forEach(
-      (entry, index) => {
-
-        console.log(
-          `${index + 1}. ${entry.url}`
-        )
-
-        console.log(
-          `   ${entry.classification} | ${entry.risk}%`
-        )
-      }
-    )
-
-    console.log(
-      "=============================="
-    )
+    console.log("==============================")
   }
 )
 
@@ -726,24 +544,14 @@ chrome.webNavigation.onCommitted.addListener(
 // CLEAN TAB MEMORY
 // ============================================================
 
-chrome.tabs.onRemoved.addListener(
-  (tabId) => {
+chrome.tabs.onRemoved.addListener((tabId) => {
+  tabNavigations.delete(tabId)
+  warningTabs.delete(tabId)
+  bypassOnce.delete(tabId)
 
-    tabNavigations.delete(tabId)
+  console.log("🗑️ Cleared memory for tab", tabId)
+})
 
-    warningTabs.delete(tabId)
-
-    bypassOnce.delete(tabId)
-
-    console.log(
-      "🗑️ Cleared memory for tab",
-      tabId
-    )
-  }
-)
-
-
-// Navigation COmpleted
 // ============================================================
 // NAVIGATION COMPLETED
 // ============================================================
@@ -763,45 +571,30 @@ chrome.webNavigation.onCompleted.addListener(
 
     const siteDecision = await getSiteDecision(details.url)
 
-    console.log(
-      "\n🏁 PRE-GUARD NAVIGATION COMPLETED"
-    )
-
+    console.log("\n🏁 PRE-GUARD NAVIGATION COMPLETED")
     console.log("Tab:", details.tabId)
     console.log("Final URL:", details.url)
 
     if (siteDecision === "trusted") {
-      console.log(
-        "🟢 Final site is already TRUSTED"
-      )
-
+      console.log("🟢 Final site is already TRUSTED")
       return
     }
 
     if (siteDecision === "untrusted") {
-      console.log(
-        "🔴 Final site is already UNTRUSTED"
-      )
-
+      console.log("🔴 Final site is already UNTRUSTED")
       return
     }
 
-    console.log(
-      "🆕 FINAL DESTINATION IS A FIRST VISIT"
-    )
+    console.log("🆕 FINAL DESTINATION IS A FIRST VISIT")
 
-    const navigation =
-      tabNavigations.get(details.tabId)
+    const navigation = tabNavigations.get(details.tabId)
 
     const currentEntry = navigation?.chain.find(
-      (entry) =>
-        entry.url === details.url
+      (entry) => entry.url === details.url
     )
 
     if (!currentEntry) {
-      console.log(
-        "⚠️ No AI result found for final destination."
-      )
+      console.log("⚠️ No AI result found for final destination.")
       return
     }
 
@@ -809,14 +602,8 @@ chrome.webNavigation.onCompleted.addListener(
       currentEntry.risk >= HIGH_RISK_THRESHOLD &&
       currentEntry.classification === "HIGH_RISK"
     ) {
-      console.log(
-        "🚨 Final destination is HIGH_RISK."
-      )
-
-      console.log(
-        "Existing security warning remains responsible for this case."
-      )
-
+      console.log("🚨 Final destination is HIGH_RISK.")
+      console.log("Existing security warning remains responsible for this case.")
       return
     }
 
@@ -826,28 +613,16 @@ chrome.webNavigation.onCompleted.addListener(
       currentEntry.risk,
       currentEntry.classification
     )
-    
 
     if (navigation) {
-      console.log(
-        "\n🛡️ FINAL REDIRECT CHAIN"
-      )
+      console.log("\n🛡️ FINAL REDIRECT CHAIN")
 
-      navigation.chain.forEach(
-        (entry, index) => {
-          console.log(
-            `${index + 1}. ${entry.url}`
-          )
+      navigation.chain.forEach((entry, index) => {
+        console.log(`${index + 1}. ${entry.url}`)
+        console.log(`   ${entry.classification} | ${entry.risk}%`)
+      })
 
-          console.log(
-            `   ${entry.classification} | ${entry.risk}%`
-          )
-        }
-      )
-
-      console.log(
-        "=============================="
-      )
+      console.log("==============================")
     }
   }
 )
