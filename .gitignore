@@ -2,6 +2,12 @@
 __pycache__/
 *.py[cod]
 
+# Runtime feedback data
+ai/data/feedback.csv
+
+# Generated trained model artifacts
+ai/models/*.joblib
+
 # Virtual environment
 .venv/
 venv/
