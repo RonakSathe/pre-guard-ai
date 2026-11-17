@@ -1,40 +1,65 @@
-from fastapi import FastAPI,HTTPException
-from pydantic import BaseModel
-import joblib
-import pandas as pd
-import csv
-from pathlib import Path
-from ai.features.url_features import extract_url_features
 
-#COnfig
-MODEL_PATH = "ai/models/neural_network.joblib"
-SCALER_PATH = "ai/models/neural_network_scaler.joblib"
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from pathlib import Path
+import csv
+
+from ai.features.url_features import extract_url_features
+from ai.api.model_manager import model_manager
+from ai.api.training_manager import start_training, get_training_status
+
+
+
+
+# ---------------------------------------------------------
+# CONFIGURATION
+# ---------------------------------------------------------
+
 FEEDBACK_PATH = Path("ai/data/feedback.csv")
 
-#Load mdoel once
-model = joblib.load(MODEL_PATH)
-scaler = joblib.load(SCALER_PATH)
 
-#Fastapi Application
+# ---------------------------------------------------------
+# FASTAPI APPLICATION
+# ---------------------------------------------------------
 
 app = FastAPI(
     title="PRE_GUARD AI",
-    description= "AI- Powered URLrisk analysis for pre-navigation protection",
-    version="0.5.0"
+    description="AI-Powered URL risk analysis for pre-navigation protection",
+    version="0.6.0"
 )
 
-#Request model
-class URLRequest(BaseModel):
-    url:str
 
-#FeedbackRequest
+# ---------------------------------------------------------
+# REQUEST MODELS
+# ---------------------------------------------------------
+
+class URLRequest(BaseModel):
+    url: str
+
+
 class FeedbackRequest(BaseModel):
     url: str
     label: int
 
-#Risk classification
-def classify_risk(probability:float) -> str:
-    return "SAFE" if probability < 0.30 else ("SUSPICIOUS" if probability < 0.70 else "HIGH_RISK")
+
+# ---------------------------------------------------------
+# RISK CLASSIFICATION
+# ---------------------------------------------------------
+
+def classify_risk(probability: float) -> str:
+
+    if probability < 0.30:
+        return "SAFE"
+
+    elif probability < 0.70:
+        return "SUSPICIOUS"
+
+    return "HIGH_RISK"
+
+
+# ---------------------------------------------------------
+# ROOT ENDPOINT
+# ---------------------------------------------------------
 
 @app.get("/")
 def root():
@@ -42,62 +67,165 @@ def root():
     return {
         "project": "PRE_GUARD AI",
         "status": "online",
-        "version": "0.5.0",
-    } 
+        "version": "0.6.0"
+    }
 
 
-#Prediction endpoint
+# ---------------------------------------------------------
+# PREDICTION ENDPOINT
+# ---------------------------------------------------------
+
 @app.post("/predict")
 def predict_url(request: URLRequest):
+
     url = request.url.strip()
 
     if not url:
-        raise HTTPException(400,"URL Cannot be empty")
+        raise HTTPException(
+            status_code=400,
+            detail="URL cannot be empty"
+        )
+
     try:
-        #Extrct features
+        # Extract URL features
         features = extract_url_features(url)
+
+        # Convert features into DataFrame
+        import pandas as pd
         feature_df = pd.DataFrame([features])
 
-        #Scale
-        scaled_features = scaler.transform(feature_df)
+        # Predict using the active model manager
+        probabilities = model_manager.predict(feature_df)
 
-        #Prediction
-        probability = float(model.predict_proba(scaled_features)[0][1])
+        probability = float(probabilities[0][1])
 
         classification = classify_risk(probability)
 
-        #Response
         return {
             "url": url,
-            "risk_score": round(probability,6),
-            "risk_percentage": round(probability*100,2),
+            "risk_score": round(probability, 6),
+            "risk_percentage": round(probability * 100, 2),
             "classification": classification,
-            "features": features,
+            "features": features
         }
+
     except Exception as error:
-        raise HTTPException(500,str(error))
 
- #Feedback   
-@app.post("/feedback")
-def save_feedback(request:FeedbackRequest):
-    url = request.url.strip()
-    if not url:
-        raise HTTPException(400,"URL cannot be empty")
-    if request.label not in (0,1):
-        raise HTTPException(400,"Label must be 0 or 1")
-
-    FEEDBACK_PATH.parent.mkdir(parents=True,exist_ok=True)
-    file_exists = FEEDBACK_PATH.exists()
-
-    with open(FEEDBACK_PATH,"a",newline="",encoding="utf-8") as file:
-        writer = csv.writer(file)
-        if not file_exists:
-            writer.writerow(["url","label"])
-        writer.writerow(
-            [url,request.label]
+        raise HTTPException(
+            status_code=500,
+            detail=str(error)
         )
 
-    return {
-        "status": "saved"
-    }
 
+# ---------------------------------------------------------
+# FEEDBACK ENDPOINT
+# ---------------------------------------------------------
+
+@app.post("/feedback")
+def save_feedback(request: FeedbackRequest):
+
+    url = request.url.strip()
+
+    if not url:
+        raise HTTPException(
+            status_code=400,
+            detail="URL cannot be empty"
+        )
+
+    if request.label not in (0, 1):
+        raise HTTPException(
+            status_code=400,
+            detail="Label must be 0 or 1"
+        )
+
+    try:
+        FEEDBACK_PATH.parent.mkdir(
+            parents=True,
+            exist_ok=True
+        )
+
+        file_exists = FEEDBACK_PATH.exists()
+
+        with open(
+            FEEDBACK_PATH,
+            "a",
+            newline="",
+            encoding="utf-8"
+        ) as file:
+
+            writer = csv.writer(file)
+
+            if not file_exists or FEEDBACK_PATH.stat().st_size == 0:
+                writer.writerow(["url", "label"])
+
+            writer.writerow([url, request.label])
+
+        return {
+            "status": "saved",
+            "url": url,
+            "label": request.label
+        }
+
+    except Exception as error:
+
+        raise HTTPException(
+            status_code=500,
+            detail=str(error)
+        )
+
+
+# ---------------------------------------------------------
+# MODEL STATUS ENDPOINT
+# ---------------------------------------------------------
+
+@app.get("/model/status")
+def model_status():
+
+    return model_manager.get_status()
+
+
+# ---------------------------------------------------------
+# MODEL RELOAD ENDPOINT
+# ---------------------------------------------------------
+
+@app.post("/model/reload")
+def reload_model():
+
+    try:
+        model_manager.load_model()
+
+        return {
+            "status": "success",
+            "message": "Model and scaler reloaded successfully",
+            "model": model_manager.get_status()
+        }
+
+    except Exception as error:
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Model reload failed: {str(error)}"
+        )
+
+# Backgroudn Training Endpoint
+# ---------------------------------------------------------
+
+@app.post("/train")
+def start_model_training():
+
+    result = start_training()
+    if not result["started"]:
+        raise HTTPException(
+            status_code=409, # Conflict
+            detail=result
+        )
+
+    return result
+
+
+# Training Status Endpoint
+
+@app.get("/training/status")
+def training_progress():
+
+    return get_training_status()
