@@ -1,4 +1,4 @@
-import os, time, joblib, pandas as pd
+import os, time, joblib, pandas as pd, shutil
 from pathlib import Path
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
@@ -21,6 +21,11 @@ RANDOM_STATE = 42
 # Minimum quality required before automatic deployment
 MINIMUM_ACCURACY = 0.90
 MINIMUM_RECALL = 0.90
+
+# Model Rejection Exception
+class ModelRejectedError(Exception):
+    pass
+
 
 # FEEDBACK VALIDATION AND FEATURE EXTTRATION
 def load_feedback():
@@ -238,42 +243,94 @@ def train_model():
     print("\n[7/7] Checking deployment conditions...")
 
     if accuracy < MINIMUM_ACCURACY:
-        raise RuntimeError(
+        raise ModelRejectedError(
             f"Deployment rejected: accuracy {accuracy:.4f} "
             f"is below {MINIMUM_ACCURACY:.2f}"
         )
 
     if recall < MINIMUM_RECALL:
-        raise RuntimeError(
+        raise ModelRejectedError(
             f"Deployment rejected: recall {recall:.4f} "
             f"is below {MINIMUM_RECALL:.2f}"
         )
 
     MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
+    SCALER_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-    # Save temporary artifacts first
+    # Temporary candidate artifacts
     temp_model = MODEL_PATH.with_suffix(".tmp")
     temp_scaler = SCALER_PATH.with_suffix(".tmp")
 
-    joblib.dump(model, temp_model)
-    joblib.dump(scaler, temp_scaler)
+    # Backup paths for the currently deployed artifacts
+    backup_model = MODEL_PATH.with_suffix(".bak")
+    backup_scaler = SCALER_PATH.with_suffix(".bak")
 
-    # Replace active artifacts only after both saves succeed
-    os.replace(temp_scaler, SCALER_PATH)
-    os.replace(temp_model, MODEL_PATH)
+    try:
+        # Save both candidate artifacts first.
+        joblib.dump(model, temp_model)
+        joblib.dump(scaler, temp_scaler)
+
+        # Preserve the existing active artifacts.
+        if not MODEL_PATH.exists() or not SCALER_PATH.exists():
+            raise FileNotFoundError(
+                "Existing model or scaler is missing. "
+                "Cannot safely deploy a replacement."
+            )
+
+        shutil.copy2(MODEL_PATH, backup_model)
+        shutil.copy2(SCALER_PATH, backup_scaler)
+
+        try:
+            # Replace active artifacts.
+            os.replace(temp_scaler, SCALER_PATH)
+            os.replace(temp_model, MODEL_PATH)
+
+        except Exception:
+            # Restore the previous pair if replacement fails.
+            shutil.copy2(backup_model, MODEL_PATH)
+            shutil.copy2(backup_scaler, SCALER_PATH)
+            raise
+
+        # Remove backups after successful deployment.
+        backup_model.unlink(missing_ok=True)
+        backup_scaler.unlink(missing_ok=True)
+
+    finally:
+        # Remove any remaining temporary files.
+        temp_model.unlink(missing_ok=True)
+        temp_scaler.unlink(missing_ok=True)
 
     duration = time.time() - started_at
+
+    metrics = {
+        "accuracy": float(accuracy),
+        "precision": float(precision),
+        "recall": float(recall),
+        "f1_score": float(f1),
+        "roc_auc": float(roc_auc),
+        "iterations": int(model.n_iter_),
+        "final_loss": float(model.loss_),
+        "training_duration_seconds": round(duration, 2),
+        "test_samples": int(len(y_test)),
+    }
 
     print("\n" + "=" * 65)
     print("          PRE-GUARD AI — MODEL DEPLOYED")
     print("=" * 65)
 
-    print(f"Model : {MODEL_PATH}")
+    print(f"Model: {MODEL_PATH}")
     print(f"Scaler: {SCALER_PATH}")
-    print(f"Accuracy: {accuracy:.4f}")
-    print(f"Recall: {recall:.4f}")
-    print(f"Training duration: {duration:.2f} seconds")
 
+    for name, value in metrics.items():
+        print(f"{name}: {value}")
+
+    return {
+        "accepted": True,
+        "metrics": metrics,
+        "model_path": str(MODEL_PATH),
+        "scaler_path": str(SCALER_PATH),
+    }
+    
 
 if __name__ == "__main__":
     train_model()
