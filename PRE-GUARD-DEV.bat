@@ -1,17 +1,36 @@
 
 @echo off
-title PRE-GUARD AI - DEVELOPMENT MODE
-
-echo Starting PRE-GUARD AI...
+title PRE-GUARD AI - DEV Launcher
 
 cd /d R:\pre-guard-ai\pre-guard-ai
-start "PRE-GUARD API" cmd /k "python -m uvicorn api.main:app --host 127.0.0.1 --port 8000 --reload"
-
-cd /d R:\pre-guard-ai\pre-guard-ai\extension-v2\pre-guard-extension
-start "PRE-GUARD Extension" cmd /k "pnpm dev"
 
 echo.
-echo PRE-GUARD AI DEVELOPMENT STARTED
-echo Backend: localhost:8000
-echo Extension: Plasmo Dev
+echo ============================================
+echo        PRE-GUARD AI - DEV STARTUP
+echo ============================================
+echo.
+
+if not exist ".venv\Scripts\python.exe" (
+    echo ERROR: Virtual environment Python not found!
+    pause
+    exit /b 1
+)
+
+echo [1/2] Starting FastAPI Backend...
+start "PRE-GUARD Backend" cmd /k ".venv\Scripts\python.exe -m uvicorn api.main:app --reload"
+
+timeout /t 2 /nobreak >nul
+
+echo [2/2] Starting Streamlit Dashboard...
+start "PRE-GUARD Dashboard" cmd /k ".venv\Scripts\python.exe -m streamlit run dashboard/app.py
+
+echo.
+echo ============================================
+echo        PRE-GUARD AI STARTED
+echo ============================================
+echo.
+echo Backend  : http://127.0.0.1:8000
+echo API Docs : http://127.0.0.1:8000/docs
+echo Dashboard: http://localhost:8501
+echo.
 pause

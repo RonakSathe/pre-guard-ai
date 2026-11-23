@@ -59,6 +59,9 @@ def prepare_dataset():
     for index, row in df.iterrows():
         try:
             features = extract_url_features(row["url"])
+
+            features["url"] = row["url"]
+
             features["label"] = row["label"]
             feature_rows.append(features)
         except Exception as error:

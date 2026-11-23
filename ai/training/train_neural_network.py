@@ -51,6 +51,7 @@ def load_feedback():
     print(f"Validated Feedback records: {len(feedback)}")
     return feedback
 
+
 def prepare_feedback_features(feedback):
     rows = []
 
@@ -59,6 +60,7 @@ def prepare_feedback_features(feedback):
     for _, row in feedback.iterrows():
         try:
             features = extract_url_features(row["url"])
+            features["url"] = row["url"]
             features["label"] = int(row["label"])
             rows.append(features)
 
@@ -92,8 +94,11 @@ def train_model():
 
     feature_columns = [
         column for column in original_df.columns
-        if column != "label"
+        if column not in {"label", "url"}
     ]
+
+    original_urls = original_df["url"].astype(str).str.strip()
+
 
     X_original = original_df[feature_columns]
     y_original = original_df["label"].astype(int)
@@ -121,7 +126,7 @@ def train_model():
     print(f"Original training samples: {len(X_train):,}")
     print(f"Original test samples: {len(X_test):,}")
 
-    # --------------------------------------------------------
+        # --------------------------------------------------------
     # 3. LOAD AND INTEGRATE FEEDBACK INTO TRAINING ONLY
     # --------------------------------------------------------
 
@@ -134,31 +139,116 @@ def train_model():
 
     if not feedback_features.empty:
 
-        # Ensure the feature order matches the original dataset
-        feedback_features = feedback_features[
-            feature_columns + ["label"]
-        ]
-
-        X_feedback = feedback_features[feature_columns]
-        y_feedback = feedback_features["label"].astype(int)
-
-        X_train = pd.concat(
-            [X_train, X_feedback],
-            ignore_index=True,
+        # Keep URL only for matching, never as a model feature
+        feedback_features["url"] = (
+            feedback_features["url"].astype(str).str.strip()
         )
 
-        y_train = pd.concat(
-            [y_train, y_feedback],
-            ignore_index=True,
+        # Identify URLs in the original train/test splits
+        train_url_keys = set(
+            original_urls.loc[X_train.index].str.strip()
         )
 
-        print(f"Feedback added to training: {feedback_count:,}")
+        test_url_keys = set(
+            original_urls.loc[X_test.index].str.strip()
+        )
+
+        # Map original training URLs to their row indexes
+        train_url_to_index = {}
+
+        for index, url in original_urls.items():
+            url_key = str(url).strip()
+
+            if index in X_train.index:
+                train_url_to_index[url_key] = index
+
+        # Reconcile feedback against the original dataset
+        overridden_train_indexes = set()
+        feedback_train_rows = []
+        feedback_train_labels = []
+
+        added_new_urls = 0
+        overridden_labels = 0
+        excluded_test_urls = 0
+
+        # Latest feedback for a normalized URL wins
+        feedback_latest = {}
+
+        for _, row in feedback_features.iterrows():
+            url_key = str(row["url"]).strip()
+
+            feedback_latest[url_key] = row
+
+        for url_key, row in feedback_latest.items():
+
+            # Never train on feedback URLs that belong to the test set
+            if url_key in test_url_keys:
+                excluded_test_urls += 1
+                continue
+
+            # Feedback overrides an existing training sample
+            if url_key in train_url_keys:
+
+                original_index = train_url_to_index[url_key]
+
+                overridden_train_indexes.add(original_index)
+                overridden_labels += 1
+
+            # New URLs are added to the training set
+            else:
+                added_new_urls += 1
+
+            # Collect feedback features and labels
+            feedback_train_rows.append(
+                row[feature_columns]
+            )
+
+            feedback_train_labels.append(
+                int(row["label"])
+            )
+
+        # Remove original training samples whose labels are overridden
+        if overridden_train_indexes:
+
+            keep_mask = ~X_train.index.isin(
+                overridden_train_indexes
+            )
+
+            X_train = X_train.loc[keep_mask]
+            y_train = y_train.loc[keep_mask]
+
+        # Add reconciled feedback to training
+        if feedback_train_rows:
+
+            X_feedback = pd.DataFrame(
+                feedback_train_rows,
+                columns=feature_columns,
+            )
+
+            y_feedback = pd.Series(
+                feedback_train_labels,
+                dtype=int,
+            )
+
+            X_train = pd.concat(
+                [X_train, X_feedback],
+                ignore_index=True,
+            )
+
+            y_train = pd.concat(
+                [y_train, y_feedback],
+                ignore_index=True,
+            )
+
+        print(f"Feedback records processed: {feedback_count:,}")
+        print(f"Training labels overridden: {overridden_labels:,}")
+        print(f"New URLs added: {added_new_urls:,}")
+        print(f"Test URLs excluded: {excluded_test_urls:,}")
 
     else:
         print("No valid feedback samples available.")
 
     print(f"Final training samples: {len(X_train):,}")
-
     # --------------------------------------------------------
     # 4. SCALE FEATURES
     # --------------------------------------------------------
